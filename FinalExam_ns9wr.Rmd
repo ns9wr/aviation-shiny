@@ -1,0 +1,991 @@
+---
+title: "ADAPT: A Partial Data Analytics Pipeline for Air Transportation"
+author: 
+  - Neil Singh^[Corresponding Author, Undergraduate Student, Systems Engineering, ns9wr@virginia.edu, +15855204428] 
+  - Bingxu Li^[Graduate Student, Systems Engineering, University of Virginia] 
+  - Scott Schwartz^[Assistant Professor, School of Data Science, University of Virginia] 
+bibliography: refs.bib
+csl: ieee.csl
+runtime: shiny 
+output:
+       html_document:
+          toc: TRUE
+          toc_depth: 5
+          toc_float: true
+          toc_collapsed: true
+          theme: journal
+          code_folding: hide
+---
+
+
+# Abstract
+
+The air transportation industry is under strong fluctuations due to the coronavirus pandemic. Travel restrictions have restricted international flight, many countries requiring quarantine on arrival. Due to the unknown virus dynamics on aircraft, many are eschewing air transportation in exchange for rental cars. To see the effects of the pandemic on flight, we will assess a subset of flight data from the United States Bureau of Transportation Statistics and evaluate notable aspects. We will assess this data via visualization and feature importance computational experiments. Given the modularity of the design of this presented visualization portal, this approach can be readily extended to different years of BTS data, thus justifying the pipeline-based perspectives.
+
+# Introduction
+
+Presently, the Coronavirus pandemic has had an omnipresent impact on a variety of industries. Commodity-based industries like oil and gas [@salisu; @bildirici], electricity [@zhong], and water [@paleologos] have all seen implications from the pandemic that have been published in the correpsonding articles. Likewise, there has been impact on the frontier of consumer-facing products. Social media [@ahmad] has witnessed different usage patterns due to the anxiety imparted by the pandemic. We will use the present work to discuss the role the pandemic and its impact on flight, with flexiblity to other time horizons outside of the current period.
+
+Flight presents an important topic to discuss. Due to COVID-19, there has been a large disruption in air travel. Commercially, operations have shifted gears. In exchange for traditional media (like consumer goods), there has been an overhaul to focus on pharmaceuticals. With the rise of Pfizer-BioNTech's, Moderna-NIAID's, Johnson and Johnson's Janessan Vaccine as the three major options in the US, we see a demand for cold-storage, air transportation, to minimize risk en-route. In the consumer-facing sector, there has been a marked decrease in air travel demand, leading to route delay, cancelation, and general paradigm shifts from airlines. In order to show the pandemic's effects, we will use data to address the numerous permutations of common questions in two fields: air traffic control and airline strategy. Air traffic control topics will discuss US-wide and airline-specific reactions to the pandemic, in terms of operational phenonmena in the form of delays (arrivals greater than fifteen minutes after scheduled time) and cancelations. Airline strategy visualization will take a deeper dive into staffing and general throughput of flights operated. We will accomplish this with 2020 data taken from the United States Bureau of Transportation Statisics (BTS). 
+
+Analyzing the millions of rows of flight data and deriving insights with respect to the pandemic proves to be a intense task. With the flaws of data, whether it be many rows, missing, corrupt, or even incorrect values, this provides a barrier to decision making of both consumers and airline strategists. With the rise of ETL (Extract-Transform-Load) suites like Tableau, Power BI, and related toolkits like the R language, these hurdles to data analytics have been heavily stymied. A concomitant demand for big data analytics (whether in the form of statistical "AB"-styled tests or forecasts) remains unfilled due to the incipient nature of the field. We address the present paucity in aviation data science dashboards by creating a partial data visualization pipeline that takes CSV-based files from the BTS and provides graphical insights. Note, the pipeline is partial, and only involves the transformation and visualization of data. Steps like data preprocessing (before these two processes) and machine learning forecasts (after these two processes) are out of the scope and will be left for future work. We will show the efficacy of this pipeline by motivating our underlying metrics, general insights, and COVID-specific analysis.
+
+# Related Work
+
+Currently, air transportation remains a topic with a variety of subroutes. These subroutes can be dichotomized into two channels: crew-based and passenger-based. Crew-based articles include work on guidance, navigation, and control. Specifically, this refers to inner mechanics of flight, whether that be flight path planning or inner avionics (digital flight systems) analysis. Conversely, there exists another family of articles that will be referred to as passenger-based. Passenger-based work will focus on artifacts that revolve making air transportation and its interactions with the passengers. Examples of passenger-based artifacts are pricing algorithms for fares (belonging to a greater family of works in the operations research and revenue management paradigms), marketing research, along with consumer decision-making. To provide more context into this work, we will pursue a survey of the literature, in the order described. 
+
+To describe the current work in crew-based approaches, we will focus the following topics: guidance, systems, and scheduling methodologies. One type of piece exists on the algorithms for guidance, navigation, and control. Works like [@sun; @singh] discuss the implementation of air traffic control algorithms and possible improvements to present practices. Likewise, collision avoidance algorithms that engage deep learning are found in work by [@li]. To go to a lower level of abstraction, there are papers that focus on producing flight systems that provide high-fidelity safety. Papers like [@fleming] study the underlying processeses needed to create an air traffic management system that can preclude certain outcomes from unsafe acts. There also exists another topic referred to as scheduling in this context; which involves coordinating fashion in a way that best benefits an airline's or crew's operational objectives. Papers like [@badrinath] apply modeling to make queuing approaches reduce lack of throughput on airport ground (e.g. taxiways, runways). Now, we will shift our focus to the more consumer/passenger-driven experience and the related papers.
+
+To focus on the passenger-based paradigm, we will describe three different families of papers. These families are revenue management, passenger behavior, and innovations. In the revenue management principle, this focuses on creating fare algorithms that can match demand and account for consumer behavior. Articles like [@shihab] describe engaging Q-learning to infer market behavior for given airfare pricing. Focusing on passenger behavior, much of the current work centers on airlines' abilties to mitigate the environmental effects of their inherently burdensome operations. Papers like [@hwang] directly address this principle, finding that green image is an important factor in such analysis. Lastly, the innovations idea will talk about the changes that are going on in air transportation that directly affect passenger experience. A McKinsey report shows meteoric and sweeping changes that have occurred and will persist due to the pandemic [@mckinsey].
+
+We see, through the survey of the literature, that there is a paucity of work that investigates this intersection between crew and passenger perspectives. To address this dearth, we will create a data visualization approach which provides value to both flight stakeholders and customers alike. Stakeholders can see leading causes of delays as a form of guidance to help fund objectives that minimize certain avoidable delays. Consumers can use these insights to best inform the "who, where and when" of their air travel. Specifically, the "who" is which airline to fly with, the "where" is the destination, and "when" pertains to the time of year which travel will take place. Our modular visualization (supported by R and Shiny) permits flexiblity that can adapt to many questions of travelers.
+
+
+# Overview
+
+To exhibit this partial pipeline is feasible, we have manually pre-processed BTS data on two major artifacts, delays/cancelations and airline business strategy. Additional data sets were brought in to facilitate visualization. For example, we needed to externally retrieve geospatial data on airports in order to perform choropleth map assembly. After, we perform a computational machine learning formulation to decide important factors possibly considerable by practitioners. However, we would like to qualify our analysis, as it is far from collectively exhaustive.
+
+The formal concession lies in the subset of data we selected. We chose to focus on five airlines that are United States-based carriers. They are listed in the table below. We excluded regional carriers (such as Piedmont Airlines and Endeavor Air) due to their unique role in each airline's strategy. They will be saved for a future study. We chose these five airlines due to their strong role in the US' air transportation economy. Ultra-low cost carriers (like Spirit and Frontier) lack a diverse network of destinations, and thus, would be difficult to analyze in a high-level context. Likewise, our analysis may be wanting due to the lack of granularity. We aggregate on a month-wide time horizon to ease data alignment.
+
+
+|  	| American  	| Delta 	| JetBlue 	| SouthWest 	| United 	|
+|-	|-	|-	|-	|-	|-	|
+| Major <br>Hubs 	| Charlotte <br>Dallas Fort-Worth<br>Philadelphia<br>Washington Reagan 	| Detroit<br>Atlanta<br>Minneapolis 	| Boston<br>Long Beach 	| Chicago Midway<br>Dallas Love-Field 	| Houston Intercontinental 	|
+| Markets 	| 	Leisure and Business 	| 	Leisure and Business 	| Mostly Leisure 	| Mostly Leisure 	| Leisure and Business 	|
+| Competitive <br>Advantage 	| OneWorld Alliance<br>(British Airways, Finnair, etc.) 	| SkyTeam Alliance<br>(Air France, KLM, etc.) 	| Elevated Economy<br>Experience 	| Beach and Ski Routes<br>Generous Baggage Rules 	| Star Alliance<br>(Lufthansa, Air India, etc.) 	|
+| Regional<br>Airline 	| Yes 	| Yes 	| No 	| No 	| Yes 	|
+
+
+
+```{r,warning=FALSE,message=FALSE}
+
+#disable warnings
+defaultW <- getOption("warn") 
+options(warn = -1) 
+
+
+#libraries
+library(plyr)
+library(tidyverse)
+library(plotly)
+library(rsconnect)
+library(shiny)
+library(reshape2)
+library(waffle)
+library(gganimate)
+library(lubridate)
+library(gifski)
+library(stringr)
+library(fmsb)
+library(xgboost)
+
+#set data dir here!
+data_dir <- ""
+
+#default width and height
+h_sentinel <- 425
+w_sentinel <- 1000
+
+#set WD
+#setwd("C:/Users/Neil Singh/Box/Documents/DS3003/homework/final/project-file")
+
+#Shiny, authorize secret key---don't show this to my Cyber prof!
+#rsconnect::setAccountInfo(name='ns9wr', token='06BC374EFC7B8DA43814C6CBBB10B383', secret='mF98v4RhXNSOz2fCtNPhhF42suAu50bZ0oi+5aUH')
+#rsconnect::deployApp(currwd)
+
+delays <- read.csv(paste0(data_dir,'Delays2020.csv'))
+employ <- read.csv(paste0(data_dir,'EmploymentData2020.csv'))
+lf <- read.csv(paste0(data_dir,'LoadFactor2020.csv'))
+locs <- read.csv(paste0(data_dir,'AirportLocations.csv'))
+pass <- read.csv(paste0(data_dir,"Passengers2020.csv"))
+sm <- read.csv(paste0(data_dir,'SeatMiles2020.csv'))
+```
+
+
+
+# Delays and Cancelations
+
+## Change in Proportion of Delays Map
+
+### Background and Motivation
+
+This is a map of the United States and airports graphed with the change of the proportion of delayed flights. We define the change of proportion of delayed flights below, and associated insights.
+$$
+\Delta_p = p^{> t^{*}}_{delay} - p^{< t^{*}}_{delay} = \frac{\sum^{\forall months > t^{*}}  n_{Delays}}{\sum^{\forall months > t^{*}}  n_{Flights}} - \frac{\sum^{\forall months < t^{*}}  n_{Delays}}{ \sum^{\forall months < t^{*}} n_{Flights}}
+$$
+
+The critical month, t-star, is controlled by the embedded slider. We begin by partitioning the data for each airport into two sections, "before" and "after" the critical time "cutpoint." For a given year, this results in $t^{*} - 1$ months of observations in the before segment, and $11 - t^{*}$ months in the after segment. We do this, such that we can attempt to evaluate delays from a year-wide basis, while commensurating with the monthly-basis we are presented with. A positive value is not preferred, as this means delays increase after the given month. Negatives are preferred, as it represents that delays are decreasing proportionally for a given airport. 
+
+To demonstrate the efficacy of our approach, we will be demonstrate with two sample cutpoints: March and October. March 2020 will allow us to see aircraft delays both before and after the pandemic began, while considering an associated factor of the transition from American Winter to Spring. October 2020 will show the split between non-holiday and holiday travel seasons. Note, Thanksgiving and Christmas are the two holidays with the greatest volumes in airports (and possible overbookings).
+
+### General Insights
+
+In October, we witness that many of the values crowd around zero. This implies that there is not much change throughout the year. This refutes the hypothesis that delays have some degree of "seasonality" to them, that is they are constant for all twelve months. The two cities, Tri Cities, Oregon and Harrisburg, PA are the only two airports that saw a notable delay increase. This is likely due to operational/airport issues, as these airports are small. If there were non-trivial weather events, we would see surrounding airports exhibit the same large increase.
+
+### COVID-specific Insights
+
+In March, we see the color bar on the left present mostly negative values. This means delays have gone down, which is likely a result of decreased winter-weather delays and route cutting in the US. Note, the most extreme negative values are in the New England Area (Stewart/New York, Burlington, and Worcester/Boston). This means that the pre-March traffic was a larger source of delay, verifying the winter weather hypothesis. However, an outlier lies in Crested Butte, where a plausible explanation could be the decrease in flights outpacing the number of delayed flights. Crested Butte is a ski destination; thus, summer flights are likely less frequent. Route cutting likely was judiciously performed by all of the carriers in question. We can safely assume that they selected routes to reduce that were prone to either: sharp delays due to operational issues (airport authority delays) or capacity (delaying a flight to prevent misconnections).
+
+
+```{r,warning=FALSE}
+gen_deltamap <- function(cutpoint) {
+  #isolates columns we need (airport, month, and number of delayed flights)
+  delays_subset <-
+    delays[c('month', 'airport', 'arr_del15', 'arr_flights')]
+  
+  #rename column names to make joining easier
+  colnames(delays_subset) <-
+    c('month', 'iata_code', 'arr_del15', 'arr_flights')
+  
+  
+  #prop of the delays: pre and in COVID
+  delays_by_airport_preCOVID <- delays_subset %>%
+    #pre-Covid
+    filter(month < cutpoint) 
+  delays_by_airport_inCOVID <- delays_subset %>%
+    #after-Covid started
+    filter(month > cutpoint) 
+     
+  #sums and calculates the proportions
+  delays_by_airport_preCOVID <- aggregate(. ~ iata_code,delays_by_airport_preCOVID,sum) %>% mutate(prop_delays_pre = arr_del15 / arr_flights)
+  delays_by_airport_inCOVID <- aggregate(. ~ iata_code,delays_by_airport_inCOVID,sum) %>% mutate(prop_delays_in = arr_del15 / arr_flights)
+  
+  #inner join the two data sets
+  delays_by_airport <-
+    delays_by_airport_preCOVID %>% inner_join(delays_by_airport_inCOVID, "iata_code")
+  #add the coordinates of the airport
+  delays_by_airport <-
+    delays_by_airport %>% inner_join(locs, "iata_code")
+  
+  #find the differences of the delay proportions
+  delays_by_airport <-
+    delays_by_airport %>% mutate(prop_change = round(prop_delays_in - prop_delays_pre, 2))
+  
+  #drop N/A entires
+  delays_by_airport <-
+    delays_by_airport[complete.cases(delays_by_airport), ]
+  
+  #create map-specific format specifications from Plotly, stored for cleanliness in list form
+  g <- list(
+    scope = 'usa',
+    projection = list(type = 'albers usa'),
+    showland = TRUE,
+    landcolor = toRGB("gray95"),
+    subunitcolor = toRGB("gray85"),
+    countrycolor = toRGB("gray85"),
+    countrywidth = 0.5,
+    subunitwidth = 0.5
+  )
+  
+  #create the figure handles
+  map_changes <-
+    plot_geo(delays_by_airport,
+             lat = ~ latitude_deg,
+             lon = ~ longitude_deg)
+  
+  
+  #adds markers and labels
+  map_changes <- map_changes %>%
+    #marker function
+    add_markers(
+      #what does each hover have?/the sep ensure a new line for each "paste group"
+      text = ~ paste(
+        paste0(name, " (", iata_code, ")"),
+        paste("Change In Proportion of Delays:", prop_change),
+        sep = "<br />"
+      ),
+      #the delays dictate the color of each marker
+      color = ~ prop_change,
+      #uses the structure constructor for square and size specification of markers
+      symbol = I("square"),
+      size = I(8),
+      #tells Plotly to delegate to text from text variable
+      hoverinfo = "text"
+    )
+  
+  
+  
+  #add the colorbar, title, and bind the format list to the central objects
+  map_changes <- map_changes %>%
+    #color bar name
+    colorbar(title = "Delta Proportion of Delays") %>%
+    #title and format list appending
+    layout(title = 'Flight Delays (Proportion Changes)', geo = g)
+  
+  return (map_changes)
+}
+
+# The app is presented in a `fluidPage` object
+ui <- fluidPage(
+  # `inputId` is the widget handle
+  sliderInput(
+    inputId = "mth",
+    label = "Cutpoint Month:",
+    min = 2,
+    max = 11,
+    value = 3
+  ),
+  # and the `mainPanel` for display
+  mainPanel(plotlyOutput("map_plot"))
+  )
+# server connect the plot with the widget
+server <- function(input, output) {
+  output$map_plot <- renderPlotly({
+    gen_deltamap(input$mth)
+  })
+}
+
+shinyApp(ui = ui,
+         server = server,
+         options = list(height = h_sentinel,width=w_sentinel))
+
+```
+
+## Delay Reason Donut
+
+### Background and Motivation
+
+The BTS will report the delays as the following (from the Causes link at the end).
+
+* Air Carrier: carrier at-fault (e.g. sick crew, strikes,overbookings, broken aircraft)
+
+* Extreme Weather: weather that is hazardous to flight
+
+* Late-arriving aircraft: an inbound aircraft that will be used for another flight arrives late, and causes cascading delays
+
+* National Airspace System (NAS): a more general cause, includes air traffic management and congested terminal airspace
+
+* Security: TSA checkpoints being at least half an hour, or issues with security
+
+The donut chart will allow us to see, for each month in 2020, the composition of delays computed monthwise (no rolling averages). Each of these five categories are accounted for with relative percentages inscribed in each segment of pie. This will allow major stakeholders, like the FAA, see why flights are getting delayed. Iterating over the months and paying attention to the changes of slice size will provide insight into the slight changes that occur from month to month.
+
+
+### General Insights
+
+Ranging from at least one-third to a 2020 high of 52.6 percent, carrier liable delays remain the highest contributor of delays on a monthly basis. Likewise, security delays remain the lowest (consistently below one percent). This may serve as a motivation for the awarding of performance-based budget to the Transportation Security Administration and its contractors. However, note that the NAS delays range account for approximately a quarter to a third of delays each month. This could be reduced through a variety of measures. Such measures include: increase air traffic management staffing, implementing airspace optimization initiatives like four-dimensional waypoints, or ground-based interval management. This would all reduce the delays due to a lack of space for takeoff and landing.
+
+### COVID-specific Insights
+
+With the rise of NAS-based delays between March and May, we should pay some closer attention to this and deduct some reasoning. For example, consider the role of state-based travel restrictions. One such case lies with New York, where travelers were required to perform fourteen day home-quarantine after arriving from out of state. An NAS delay could occur as a carrier may need more time to gather individuals to collect health forms, delaying a given flight. We should also consider how conventional delays sources could be worsened by the pandemic. Crew illness delays will rise as more individuals will test positive for the virus, aircraft maintenance will take longer (due to an adding anti-viral spraying), and likewise, airline health checks (like checking of negative RT-PCR tests) will delay boarding.
+
+
+```{r}
+donut_bymonth <- function(month_num)
+{
+  #only get the causes columns and the months
+  causes_subset <-
+    delays[c('month',
+             'carrier_ct',
+             'weather_ct',
+             'nas_ct',
+             'security_ct',
+             'late_aircraft_ct')]
+  #pretty-name them
+  colnames(causes_subset) <-
+    c('Month',
+      'Carrier',
+      'Weather',
+      'NAS',
+      'Security',
+      'Late Aircraft')
+  #compress data frame, summing --> one row = one month
+  by_month <- aggregate(. ~ Month, causes_subset, sum)
+  #go from wide to long
+  by_month <- melt(by_month, id.vars = "Month")
+  #retain only the sum of delays by cause for a given month
+  selected_month <- by_month[by_month$Month == month_num, -1]
+  #construct plotly object
+  donut <-
+    plot_ly(selected_month,
+            labels = ~ variable,
+            values = ~ value) %>%
+    #add donut hole
+    add_pie(hole = 0.6) %>%
+    #title addition
+    layout(
+      title = "Cause of Delay",
+      #disable x and y axis labels in Plotly construct
+      xaxis = list(
+        showgrid = FALSE,
+        zeroline = FALSE,
+        showticklabels = FALSE
+      ),
+      yaxis = list(
+        showgrid = FALSE,
+        zeroline = FALSE,
+        showticklabels = FALSE
+      )
+    )
+  return(donut)
+}
+
+# The app is presented in a `fluidPage` object
+ui <- fluidPage(
+  # `inputId` is the widget handle
+  numericInput(
+    inputId = "mth",
+    label = "Month:",
+    min = 1,
+    max = 12,
+    value = 3
+  ),
+  # and the `mainPanel` for display
+  mainPanel(plotlyOutput("donut"))
+  )
+# server connect the plot with the widget
+server <- function(input, output) {
+  output$donut <- renderPlotly({
+    donut_bymonth(input$mth)
+  })
+}
+
+shinyApp(ui = ui,
+         server = server,
+         options = list(height = h_sentinel,width=w_sentinel))
+
+```
+
+
+## Cancelations for Major Airports Tile Plot
+
+### Background and Motivation
+The underlying motivation for studying cancelations is greater than delays, as the financial consequences for carriers and the government are often steeper. For example, overnight cancelations will often add multiple sources of overhead. This includes, crew overtime wages, accommodation for stranded passengers, and storage costs/penalties at an associated hangar. For the government, cancelations can often add costs to airport maintenance fees and airport authority surcharges, as the gate and ground crew often are required to unload luggage.
+
+Through the tile plot, this will give both a clean representation of categorical variables (airports) and continuous density (cancelation count). A third dimension of time is also accounted for, where the change in shade will allow us to see changes for each time horizon, both across and within (a) given airport(s). However, a shortcoming of this plot is that it gives the raw amount of cancelations. Thus, some sort of normalization should be performed in future work to account for airports of different sizes. 
+
+### General Insights
+In the first-half of the year, April and May were the worst months, as seen through the corresponding shading legend. This aligns with the pandemic's spread in the US. Secondly, we see in November and December, the latter half of the year has the worst months there. This makes phenomenological sense, as this is the holiday travel season (with concomitant effects of US Winter Weather). When looking at all twelve months view, we see ATL (Atlanta) having the most cancelations in March as the global maxima for our data. We can assume this to be plausible, as Atlanta is the world's largest airport, when considering traffic-based evaluation metrics.
+
+### COVID-specific Insights
+Besides the general insights for this section, a concept worthy of pointing out were medium-sized airports proving largely resilient against cancelation. For example, Washington Dulles was able to remain constantly low throughout March and April, a sign of having a good pandemic preparation program for airport operations. Likewise, Miami and Philadelphia also fared quite well, which are both hubs for American Airlines. This may allow us to ascribe American with having a good pandemic transition approach, as they were able to keep the cancelations low. Especially given the inclement nature of Phildelphia weather in early Spring, this should be noted.
+
+
+```{r}
+sqdelaydest <- function(begin_date,end_date) {
+  #groups month/year columns to be casted into date objects
+  delays$date <- date(paste(delays$year,delays$month,"01",sep="-"))  
+  
+  #subset columns we need
+  cancel_by_airport <- delays[,c('date','airport','arr_cancelled')]
+  
+  #sum over each airport-month replicate 
+  cancel_by_airport <- aggregate(. ~ date +airport , cancel_by_airport, sum)
+  
+  #busiest airports in US
+  busiest <- c('ATL',	'DFW',	'DEN',	'ORD',	'LAX',	'CLT',	'IAH',	'LAS',	'PHX',	'MCO',	'SEA',	'MIA',	'FLL',	'SFO',	'JFK',	'MSP',	'EWR',	'DTW',	'BOS',	'SLC',	'PHL',	'BWI',	'TPA',	'SAN',	'MDW',	'IAD',	'BNA',	'LGA',	'DAL',	'DCA')
+  
+  #retain only busiest
+  cancel_by_airport <- cancel_by_airport %>% filter(airport %in% busiest)  
+  
+  #retain only bounded months
+  cancel_by_airport <- cancel_by_airport %>% filter(date <= date(end_date) & date >= date(begin_date))
+  
+  #pretty rename cancelations
+  names(cancel_by_airport)[names(cancel_by_airport) == 'arr_cancelled'] <- 'Cancelations'
+  
+  #create the grid plot
+  grid_handle <- ggplot(cancel_by_airport, aes(date, airport)) + geom_tile(aes(fill = Cancelations)) + labs(x="Month",y="Airport")  
+  
+  return(grid_handle)
+
+}
+
+
+# The app is presented in a `fluidPage` object
+ui <- fluidPage(
+  # `inputId` is the widget handle
+  dateRangeInput(
+    inputId = "mth",
+    label = "Month:",
+    start = "2020-01-01",
+    end = "2020-12-01",
+    min = "2020-01-01",
+    max = "2020-12-01",
+    format = "mm/dd/yy"
+  ),
+  # and the `mainPanel` for display
+  mainPanel(plotOutput("grid"))
+  )
+# server connect the plot with the widget
+server <- function(input, output) {
+  output$grid <- renderPlot({
+    sqdelaydest(input$mth[1],input$mth[2]) 
+  })
+}
+
+shinyApp(ui = ui,
+         server = server,
+         options = list(height = h_sentinel,width=w_sentinel))
+
+
+
+```
+
+# Carrier Performance
+
+To change the focus, we will now discuss comparing the carriers we have subsetted above. This will allow us to get the needed contrasts of each carrier's strategy. For the practitioners, this will provide insight into questions like: "Who is more on time?" and "Who is able to keep passengers in the sky?" For academic individuals, this will guide research into certain factors that will differentiate an airline's objectives. For example, one strategy may be to allow cancellations if they cost less than delays. 
+
+
+
+## Delays By Carrier Waffle Chart
+
+### Background and Motivation
+Among all delays at airports for a given month, we divide them by airline via the waffle chart. A waffle chart uses hue as a differentiating factor, along with the amount of cubes allocated. This redundancy draws upon human-computer interaction, to make the viewing experience easier on the viewer. Specifically, this chart provides a very quick glance at the distribution for delays. However, like the cancelations plot above, does not account for network size. That is, JetBlue is perceived as having lower delays. This trivializes that other airlines, although they have greater delays, also have larger networks (and thus more opportunities to accrue delays). Seeing the slight change in color when toggling through months allows stakeholders to see inter-months dynamics of relative delays between these five airlines.
+
+Given the objective was have to ten by ten grid, we can assume that for each full block, it is a ten percent relative contribution. However, as these proportions are not integer defined, we witness some configurations of blocks being missing.
+
+### General Insights
+Through a cursory glance of these waffles, we see that United had its heyday earlier in the year. As the months progressed, we saw that United's presence in the grid increase, showing a greater proportion of delays being ascribed to them. American has a steady phenomena that spikes in December. Logically, this makes sense, as American has diverse hubs throughout the US, not congregated like JetBlue in the northeast (John F. Kennedy and Boston Logan). JetBlue has a pivot point, that is, winters present more delays for them than non-winter months. This is likely due to its niche, limited route offerings and the associated advantage of being able to leverage strategic advantage. The Boston hub provides added sources of delays in the winter, due to the snowy climate.
+
+### COVID-specific Insights
+Looking at the waffle plot, we see one major shift when iterating through February, March, and April. United and JetBlue witness a decrease in their relative proportion of delays, while Delta, Southwest, and American stay relatively stagnant. This speaks to the merit of Delta and American especially, as they are trans-Atlantic and trans-Pacific carriers. This shows the independence between international and domestic delays, which speaks well to their operational integrity. By operational integrity, we want to express that failures do not cascade.
+
+```{r}
+
+carriers_bymonth <- function(month_num)
+{
+  #goes into delay data, and gets the carrier, data, and values for number of delays/flights
+  causes_subset <- delays[c('month','carrier_name','arr_del15','arr_flights')]
+  #pretty names columns
+  colnames(causes_subset) <- c('Month','Carrier','Number of Delays','Amount of Flights')
+  #summation aggregate for each Month/Carrier combo
+  month_carrier <- aggregate(. ~ Month + Carrier,causes_subset,sum)
+  #use argument to isolate month (then discard column)
+  month_carrier <- month_carrier[month_carrier$Month == month_num,-1]
+  #creates the percentage
+  month_carrier$`Relative Proportion of Flights Delayed` <- month_carrier$`Number of Delays`*100/sum(month_carrier$`Number of Delays`)
+  month_carrier <- month_carrier[c('Carrier','Relative Proportion of Flights Delayed')]
+  #creates named vector
+  named_vec <- setNames(month_carrier$`Relative Proportion of Flights Delayed`,as.character(month_carrier$Carrier))
+  #calls waffle
+  waffle <- waffle(named_vec,rows=10)  
+  return(waffle)
+}
+
+
+# The app is presented in a `fluidPage` object
+ui <- fluidPage(
+  # `inputId` is the widget handle
+  numericInput(
+    inputId = "mth",
+    label = "Month:",
+    min = 1,
+    max = 12,
+    value = 3
+  ),
+  # and the `mainPanel` for display
+  mainPanel(plotOutput("waffle"))
+  )
+# server connect the plot with the widget
+server <- function(input, output) {
+  output$waffle <- renderPlot({
+    carriers_bymonth(input$mth)
+  })
+}
+
+shinyApp(ui = ui,
+         server = server,
+         options = list(height = h_sentinel,width=w_sentinel))
+
+  
+```
+
+## Density Estimation of Logged Average Delays
+
+### Background and Motivation
+
+We create density plots for the logged average delays. To elucidate further, for each airport, we find the average duration for each carrier. This is done through taking the sum of delay minutes and dividing by number of delay events. Then, we plotted them on a density fit to see a heavy right skew, that is alot of the delays are short. To accommodate this, we took the logarithm to do away with much of the skew. After, we superimposed each of these plots on the same axis for each month.
+
+$$
+log(\frac{\sum t_{delay}}{n_{delay}}),\exists  airports,\exists  airline
+$$
+
+This will inform operations by comparing who has the most efficient response to delays. A distribution curve that is more right means delays are longer. Noting shape, having a skewed right distribution is more beneficial. Comparing both the skew and position allows us to compare these airlines' relative performances through another delay-driven metric.
+
+### General Insights
+
+The major insight is that Southwest consistently outperforms their competitors, both in expectation and spread metrics. We see that the tail at being to the left of the others on most curves means that Southwest is able to quickly recover from accrued delays. The large height also shows a large proportion of delays around this lesser value. This means that Southwest is able to reproduce this quick recover consistently (unlike others, who have greater variance in their delays, and thus less predictability). SouthWest has an advantage of being a North and Central American carrier, which allows us for them to coordinate operations in a more centralized fashion.
+
+### COVID-specific Insights
+During March, we see a surprising homogeneity among all non-SouthWest carriers. For JetBlue, who is a predominately North and Central American carrier, this is not desirable. This means, despite having a smaller network (compared to United, Delta, and American), they were not able to minimize their average delay duration, which is a sign of poor strategy. Among the three other carriers, it is hard to reach a conclusive result if one has a significant competitive advantage, due to skew and width.
+
+
+```{r}
+
+meandelay_distr <- function(month_num)
+{
+  carrier_time <- delays[c('month','carrier_name','arr_delay','arr_del15')]
+  colnames(carrier_time) <- c('Month','Carrier','Minutes Delayed','Number of Delayed Flights')
+  carrier_time <- carrier_time[carrier_time$Month == month_num,-1]
+  densityplot<- ggplot(carrier_time,aes(log(`Minutes Delayed`/`Number of Delayed Flights`),color= Carrier)) + geom_density() + labs(x="Logged Mean Delay Duration",y="Density")
+  return (densityplot)
+}
+
+# The app is presented in a `fluidPage` object
+ui <- fluidPage(
+  # `inputId` is the widget handle
+  sliderInput(
+    inputId = "mth",
+    label = "Month:",
+    min = 1,
+    max = 12,
+    value = 3
+  ),
+  # and the `mainPanel` for display
+  mainPanel(plotOutput("multihist"))
+  )
+# server connect the plot with the widget
+server <- function(input, output) {
+  output$multihist <- renderPlot({
+    meandelay_distr(input$mth)
+  })
+}
+
+shinyApp(ui = ui,
+         server = server,
+         options = list(height = h_sentinel,width=w_sentinel))
+
+```
+
+
+
+# Airline Operational Efficiency
+To emphasize an airline's decisions, we must look beyond their reactions to potential delays and cancelations. Looking into their employment and passenger occupancy metrics will permit us to evaluate their strategy by looking at the output of the underlying system. Thus, we will look at three metrics: the employment counts, load factor, and the seat availability. This will allow us to derive comparative insights between each of our five airlines.
+
+
+## Percent Change in Employees Animation
+
+
+
+### Background and Motivation
+
+We graphed the percent change in the amount of employees for each airline, from February to December. Note, January is excluded due to there be no preceding data. By showing the percent change, this allows two benefits over raw figures alone. First, there will be a perceived larger or smaller penalty due to the different sizes of employee bases. That is, someone who fires ten thousand employees should be scrutinized with greater severity if their employee base is two hundred thousand, rather than half a million. The easy division at zero makes visualization easier on the viewer, any above figures are positive (as there are more hires), and vice versa. 
+
+The benefits of using animation are three-fold. Firstly, the rendering as a GIF reduced user workload, which permits them to focus on analysis and trends. Next, the plotting gives a sense of a continuous, functional form. If this is acceptable in the domain of application, this will allow the analyst to focus on trends in between data points. Lastly, the visualization is reproducible. Having the widgets with Shiny, although good for customization of insights, can prove difficult if the analyst forgets an input to reproduce a given conceptual visualization.
+
+### General Insights
+
+We see that the greater change occurred with Delta Airlines. This can be found by looking at the integral of the magnitude function. This shows signs of a "furlough" styled approach. From February to May, there is the firing bout, where it recovers throughout the summer. We see two waves of employee firings where United decreases staffing in the Spring and Fall. Southwest and JetBlue were the most resilient, as there is minimal net change in the area of their plots.
+
+
+### COVID-specific Insights
+
+As mentioned earlier, we see that Southwest and JetBlue prove to utilize advantages of a centralized route network. Their networks were not as strongly affected as others due to travel restrictions. Delta, United, and American likely had to fire international crews, as travel bans took place throughout the world. To mitigate this, airlines will often agree to buy employees out of their contracts. This is considered a win-win situation often, airlines reduced their cost liability in the short-term and those who were risk-averse can retire early [@cnbc]. Thus, we can qualify our analysis and say the changes in our plot are not as severe as perceived. Many of these employees may have taken "buy-outs," where many people taking the generous bonus will produce this associated effect. 
+
+
+```{r}
+#groups data by the carrier and month, to get the month-by-month percent change
+pct <- function(x) {(x/lag(x)-1)*100}
+empl_pt <- with(employ,employ[order(CARRIER_NAME,MONTH),]) %>% group_by(CARRIER)%>% mutate_each(funs(pct),EMPTOTAL)
+#drops the N/A January references (no previous data)
+empl_pt <- empl_pt[complete.cases(empl_pt),]
+#groups month/year columns to be casted into date objects
+empl_pt$date <- date(paste(empl_pt$YEAR,empl_pt$MONTH,"01",sep="-"))  
+
+#pretty rename carrier
+names(empl_pt)[names(empl_pt) == 'CARRIER_NAME'] <- 'Carrier'
+
+#applys a transition reveal, month-by-month
+employment_plot <- ggplot(empl_pt,aes(x=date,y=EMPTOTAL)) + geom_line(aes(color=Carrier)) +  labs(x="Month",y="Inter-Month Percent Change")+ transition_reveal(date)
+
+
+# The app is presented in a `fluidPage` object
+ui <- fluidPage(
+  # and the `mainPanel` for display. however using an imageOutput object
+  mainPanel(imageOutput("employplot"))
+  )
+# server connect the plot with the widget
+server <- function(input, output) {
+  output$employplot <- renderImage({
+    temp_file <- tempfile(fileext='.gif')
+    anim_save("temp_file.gif",animate(employment_plot,renderer=gifski_renderer()))
+    list(src = "temp_file.gif", contentType = 'image/gif')
+  },deleteFile=TRUE)
+}
+
+shinyApp(ui = ui,
+         server = server,
+         options = list(height = h_sentinel,width=w_sentinel))
+
+```
+
+
+## Load Factor Stacked Bar Plot
+
+
+
+### Background and Motivation
+
+The load factor is a very important metric in the revenue management paradigm for airlines. The underlying objective is to maximize the load factor for the given route. Specifically, the load factor balances how many seats were sold, with respect to the seats available. Specifically, the computation is below for a given flight [@mit]. 
+
+$$
+  LF\% = 100* \frac{n*d_{journey}}{\overline{n}*d_{flight}}
+$$
+
+The load factor is the quotient of the amount of miles flown by all passengers divided by the number of miles available. A situation where $d_{journey} \neq d_{flight}$ are on direct flights, where passengers may get off the aircraft at an intermediate destination and the flight continues under the same number.
+Airlines incredibly value from this metric, a value closest to 100 implies they are dispatching the correct frequency, aircraft size, and crew for a given routing. "Travel hackers" can gamify this metric, and book flights with high load factors to try to get "bump" overbooking vouchers.
+
+### General Insights
+
+The top stacked bar chart is for domestic routings, and bottom corresponds to international. Irrespective of sector, we see each airline performs around the same due to similar bar heights. That is, there are no glaring differences or shortcomings in performance isolated to one single carrier. This means that each airline has valuable, proprietary practice that allows them to well address their target customer base and fill flights similarly. A shortcoming to our assessment arises from the lack of international data. The BTS sequesters this data for October and beyond, and will become available as time progresses. This reduces the efficacy of forecasting tasks on this data. 
+
+### COVID-specific Insights
+
+Consider April 2020 as a critical time for the pandemic. Each airline reaches a minimum load factor, however Delta prevails in maintaining a high international load factor. This is likely due to their role in performing repatriation efforts of connecting the US and foreign nationals with their respective base countries. Often, commercial flights would be full, which would result in government-sponsored charter flights that were very costly. One such example is the Government of India's collaboration with Air India on the Vande Bharat effort to provide a transportation option to India. Evidence of Delta's heavy role in the repatriation efforts can be found here [@delta]. 
+
+
+```{r,warning=FALSE}
+#groups month/year columns to be casted into date objects
+lf$date <- date(paste(lf$Year,lf$Month,"01",sep="-"))  
+
+#subset what we need
+lf_subset <- lf[c('Airline','date','DOMESTIC','INTERNATIONAL')]
+
+#melts the domestic and international subsets
+dm1 <- melt(lf_subset[,c('Airline','date','DOMESTIC')], id=c('Airline','date'))
+dm2 <- melt(lf_subset[,c('Airline','date','INTERNATIONAL')], id=c('Airline','date'))
+
+#bind them, rename them
+lf_melt <- rbind(dm1,dm2)
+colnames(lf_melt) <- c('Airline','Date','Market','Load Factor')
+lf_melt$Market <- str_to_title(lf_melt$Market)
+
+#plot with facet
+facet_lf <- ggplot(lf_melt,aes(x=Date,y=`Load Factor`)) + geom_bar(position="stack",stat="identity",aes(fill=Airline)) + facet_grid("Market")
+
+
+
+# The app is presented in a `fluidPage` object
+ui <- fluidPage(
+  # and the `mainPanel` for display
+  mainPanel(plotOutput("dual_bar"))
+  )
+# server connect the plot with the widget
+server <- function(input, output) {
+  output$dual_bar <- renderPlot({
+    facet_lf
+  })
+}
+
+shinyApp(ui = ui,
+         server = server,
+         options = list(height = h_sentinel,width=w_sentinel))
+
+
+```
+
+## Passenger Volumes Boxplots
+
+
+### Background and Motivation
+
+To investigate the numerator of the load factor (the amount of passengers flying), we can look at the passenger volumes. Although this is not a direct numerator computation, we can derive the phenomena that are occurring from this plot. We try to replicate a financial modeling "candlestick plot." Through a temporal representation of multiple boxplots, we can see the dynamics of the amount of passengers for our five airlines. Through growing and shrinking boxes, whiskers, and positions on the vertical axis, this provides numerous insights. This provides passengers and airlines with great value, as we can visualize the public's willingness to fly as we ramp-up post-pandemic. 
+
+### General Insights
+
+Notwithstanding the pandemic, we see that the airline industries customer volumes are very scattered as seen through the outliers and long lower whiskers. Due to the small (n = 5) iterations for each month, it would not be prudent to make conclusions around spread of customer volume. Addition of other carriers in the US and abroad (and scaling for relative populations) will be saved for ensuing publications. Throughout 2020, we see that this plot exposes that passenger volumes exhibits dynamical systems behavior. In particular, the scattering/spread minimizing after March and we approach some degree of steady state behavior in the summer and early fall. 
+
+### COVID-specific Insights
+
+Our plot shows the pandemic presented a force that elicited a sense of uniformity among carriers. Intuitively, this is likely due to the decreased trans-Atlantic and trans-Pacific demand. We can witness in April, once lockdowns began, that the box height is very small. This means the interquartile range is very small likewise, and that clustering occurs among these five data points. Specifically, the April IQR is 300k passengers, which is very small, considering the volatile demand presented by factors such as: emergency travel for government, closing of ports and rail options, and transportation for the vaccine/preventive efforts involved. 
+
+
+```{r}
+#groups month/year columns to be casted into date objects
+pass$date <- date(paste(pass$Year,pass$Month,"01",sep="-"))  
+
+#merges sum of all passengers
+pass$Total <- (as.numeric(pass$Domestic) + as.numeric(pass$International))/1e6
+
+#creates the boxplot 
+bps <- ggplot(pass,aes(group=date,y=Total,x=date)) +geom_boxplot() + labs(x="Date",y="Domestic and International Passengers (Millions)")
+
+# The app is presented in a `fluidPage` object
+ui <- fluidPage(
+  # and the `mainPanel` for display
+  mainPanel(plotlyOutput("bps"))
+  )
+# server connect the plot with the widget
+server <- function(input, output) {
+  output$bps <- renderPlotly({
+    ggplotly(bps)
+  })
+}
+
+shinyApp(ui = ui,
+         server = server,
+         options = list(height = h_sentinel,width=w_sentinel))
+```
+
+
+## Availablility Web
+
+
+### Background and Motivation
+
+We plotted a web diagram for the the availability seat-miles (ASMs) metric [@mit]. Availability is a metric that shows an airline's network size, route frequency, and fleet size. This is meant to address the denominator of the load factor computation. Note, since our computation excludes regional carriers, this ASM computation will be for mostly larger aircraft (excluding smaller aircraft meant for NorthEast business routes connecting New York, DC, and Boston).
+
+$$
+   ASMs = \sum^{\forall i \in routes} n_i * d_i 
+$$
+
+We present our findings in a web diagram, with mean for each month-scope (domestic versus international) combination, for all airlines.
+Our benefit of using the web is the being able to portray time with a clock analogy, which helps aid the trend identification of users. Likewise, the superimposition of both trends allows us to visualize any crossing of webs, and interpret that if there are any domain-specific insights that arise.
+
+### General Insights
+
+Starting with web-size, we see that the mean for the international routes are smaller than domestic routes. This makes intuitive sense, as most of the routes for our collection of carriers connect US cities with each carrier's hubs. A weakness in the web is the linearity in spacing. The even spacing implies a linear mapping of variables, which with log-scale data, may prove misleading. However, none of the phenomena here are log-scaled or log-based to our knowledge. The greater convexity of the domestic line segments shows a more gradual (less sudden) change in mean ASMs, compared to international flights. A future research route may look into the convexification of the web shape as an optimization problem, which could help predict ASMs for future years.
+
+### COVID-specific Insights
+
+The pronounced spike in February aligns with a local maxima in air travel. Business travel was in full swing, and when combined with Valentine's and Presidents' Week travel, made for a healthy amount of demand. However, one place where the visualization is wanting is in the depiction of the dramatic drop from March to April. This drop is seen through steeply sloped lines, however, is obfuscated by the months after being consistently lower. International travel remains low, visualized by it being within the second ring for April and beyond. This is likely due to "use-it-or-lose-it" rules. For example, Airlines would have gates at expensive, coveted airports like London's Heathrow. The English government fielded the idea that airlines should operate routes (so they can collect arrival fees and taxes), else they would lose the spot [@lucky]. 
+
+
+```{r}
+# Available Seat-miles (the number of seats and the distance flown in thousands (000))
+#groups month/year columns to be casted into date objects
+sm$date <- date(paste(sm$Year,sm$Month,"01",sep="-"))  
+#month-wise mean
+mean_sm <- sm  %>% group_by(date) %>% dplyr::summarise(meanDomestic = mean(Domestic),meanInternational=mean(International))
+#transpose tibble and cast to table
+mean_sm_t <-as.table(rbind(rev(mean_sm$meanDomestic), rev(mean_sm$meanInternational)))
+rownames(mean_sm_t) <- c('Domestic','Intl')
+colnames(mean_sm_t) <- month.name[10:1]
+mean_sm_t <- rbind(rep(max(mean_sm_t),ncol(mean_sm_t)),rep(min(mean_sm_t),ncol(mean_sm_t)),mean_sm_t)
+
+colors_in=c( rgb(0.2,0.5,0.5,0.4), rgb(0.8,0.2,0.5,0.4) , rgb(0.7,0.5,0.1,0.4) )
+
+#constructor
+rc <- radarchart(data.frame(mean_sm_t), axistype=0,pcol=colors_in , pfcol=colors_in)
+
+#adds legend!
+legend(x=1.15, 
+       y=1.35, 
+       legend = rownames(mean_sm_t[-c(1,2),]), 
+       bty = "n", pch=20 , col = colors_in, cex = 1.05, pt.cex = 1.5)
+
+# The app is presented in a `fluidPage` object
+#ui <- fluidPage(
+  # and the `mainPanel` for display
+#  mainPanel(plotOutput("spider"))
+#  )
+# server connect the plot with the widget
+#server <- function(input, output) {
+#  output$spider <- renderPlot({
+#    rc
+#  })
+#}
+
+#shinyApp(ui = ui,          server = server,          options = list(height = h_sentinel,width=w_sentinel))
+```
+
+# Computational Experiments
+
+After discussing major operational objectives of a given airline and describing them with visualization, we can now bring our work together with computational experiments. Specifically, we are seeking to predict the load factor due to its strong role in airline revenue management algorithms. 
+We opted for the XGBoost algorithm, due to its popularity in data pipelines [@sieds]. We grouped datasets on monthly basis, where summations were done as needed when opting for an aggregation operation.  We use the passenger volume, seat miles, employment, and delays data for our predictors. After, we trained XGBoost as a regression-based tree, using the default objective function (min squared loss) and $n = 100$ training iterations. We see the following features as the best, in the table below, with metrics in the Shiny table.
+
+| Ranking 	| Feature 	| Meaning 	| Possible Significance/Interpretation 	|
+|-	|-	|-	|-	|
+| 1 	| month 	| Month of Observation 	| Possible seasonality in data?<br>Better fit for time-series models?  	|
+| 2 	| pass_total 	| Millions of Passengers 	| Volume of passengers helps predict<br>LF (aligning with analytical solution) 	|
+| 3 	| nas_delay 	| Amount of Minutes Delayed<br>due to National Airspace System 	| shows that delays due to air traffic <br>control affect the plane occupancy 	|
+| 4 	| arr_diverted 	| Number of Diverted Flights 	| shows diversion affect the consumer <br>behavior of buying flights 	|
+| 5 	| arr_canceled 	| Number of Canceled Flights 	| shows cancelations affect the volume <br>on flights 	|
+
+
+ 
+```{r,message=FALSE,results=FALSE}
+#create copies
+lf_ce <- lf
+pass_ce <- pass
+sm_ce <- sm
+employ_ce <- employ
+delays_ce <- delays
+
+#rename load factor columns for joins
+colnames(lf_ce) <- c("carrier_name","carrier",'year','month','domestic_lf','intl_lf','total_lf','date')
+#rename pass columns for joins
+colnames(pass_ce) <- c('year','month',"carrier_name",'domestic_pass','intl_pass','date','pass_total')
+#rename sm columns for join
+colnames(sm_ce) <- c('year','month',"carrier_name",'domestic_sm','intl_sm','total_sm','date')
+
+#for load factor, we need to change the airline names to the Inc-form and lowercase the names
+lf_ce$carrier_name <- mapvalues(lf_ce$carrier_name, from=c("American","Delta Airlines", "JetBlue", "Southwest","United"), to=c("American Airlines Inc.", "Delta Air Lines Inc.","JetBlue Airways","Southwest Airlines Co.", "United Air Lines Inc."))
+
+#for the employment set, lowercase headers for joins 
+names(employ_ce) <- tolower(names(employ_ce))
+
+#remove Carrier code abbreviation and airport (as needed) then sum
+delays_by_carrier <- aggregate(. ~ year + month + carrier_name,delays_ce[,-which(names(delays_ce) %in% c('carrier','airport'))],sum)
+employ_by_month <- aggregate(. ~ year + month + carrier_name ,employ_ce[,-which(names(employ_ce) %in% c('carrier'))],sum)
+
+#filter bc all data only up to Oct
+lf_ce <- lf_ce %>% dplyr::filter(month < 11)
+
+#join all data
+month_airline_all <- dplyr::inner_join(delays_by_carrier,employ_by_month) %>% dplyr::inner_join(lf_ce) %>% dplyr::inner_join(pass_ce) %>% dplyr::inner_join(sm_ce)
+
+#drop categorical and NA entries
+month_airline_all <- month_airline_all[complete.cases(month_airline_all), sapply(month_airline_all, is.numeric)]
+
+#drop_ domestic and intl_lf
+month_airline_all <- month_airline_all[,-which(names(month_airline_all) %in% c('domestic_lf','intl_lf'))]
+
+#drop the lf (we are trying to predict it)
+xgb_preds <- month_airline_all[,-which(names(month_airline_all) %in% c('total_lf'))]
+xgb_response <- month_airline_all$total_lf
+
+#train the model!
+training_data <- xgb.DMatrix(data=as.matrix(xgb_preds),label=as.matrix(xgb_response))
+bstDMatrix <- xgboost(data = training_data,nrounds=100,verbose=FALSE)
+
+# five fold cross validation
+cv_xgb <- xgb.cv(data=training_data,nfold=5,nrounds=100)
+
+#get importance
+importance <- as.data.frame(xgb.importance(feature_names = names(xgb_preds), model = bstDMatrix))
+
+#clean up formatting
+importance[,-1] <- format(round(importance[,-1],5),nsmall=5)
+
+
+# The app is presented in a `fluidPage` object
+ui <- fluidPage(
+  # and the `mainPanel` for display
+  mainPanel(dataTableOutput("xgb"))
+  )
+# server connect the plot with the widget
+server <- function(input, output) {
+  output$xgb <- renderDataTable(importance)
+}
+
+shinyApp(ui = ui,
+         server = server,
+         options = list(height = h_sentinel,width=w_sentinel))
+```
+
+Now, we plot the metrics for model evaluation. Note, we must consider the effects of overfitting.
+This will be left for the next paper. Most benefits taper off around iteration 15.
+
+
+```{r,message=FALSE}
+# create the ggplot
+
+#melts list for ggplot
+melted_metrics <- melt(cv_xgb$evaluation_log)
+
+#takes away iteration
+melted_metrics <-  melted_metrics[melted_metrics$variable != 'iter',]
+
+#rename metrics
+melted_metrics$variable <- mapvalues(melted_metrics$variable , from=c("train_rmse_mean","train_rmse_std", "test_rmse_mean", "test_rmse_std"), to=c("Mean Training RMSE", "Standard Deviation of Training RMSE","Mean Test RMSE","Standard Deviation of Test RMSE"))
+
+#create iteration column
+melted_metrics$Iteration <- rep(1:100,4)
+
+#clean up numbers
+melted_metrics$value <-  round(melted_metrics$value ,5)
+
+#creates the ggplot 
+rmse_iterations <- ggplot(melted_metrics,aes(y=value,x=Iteration)) +geom_line(aes(color=variable)) + labs(x="Iteration",y="Metrics",color="Variable")
+
+
+
+# The app is presented in a `fluidPage` object
+ui <- fluidPage(
+  # and the `mainPanel` for display
+  mainPanel(plotlyOutput("rmse"))
+  )
+# server connect the plot with the widget
+server <- function(input, output) {
+  output$rmse <- renderPlotly(rmse_iterations)
+}
+
+shinyApp(ui = ui,
+         server = server,
+         options = list(height = h_sentinel,width=w_sentinel))
+
+
+#re-permit warnings
+options(warn = defaultW)
+```
+
+# Conclusions and Future Work
+
+We generated a framework that supports an extended data pipeline for the analysis of aviation data. We performed an assessment of flight data from the United States BTS. Upon viewing of the visualization, we are able to deduct phenomena that both pertain to aviation trends and the pandemic in general. After, we employed the XGBoost algorithm to find important features to predict load factors on a monthly basis. This can help airlines create initiatives that improve their flight capacities. In future work, we seek to design control-based prediction of the load factor via techniques like model predictive control.
+
+
+
+# Data
+1. [BTS Air Delay Data](https://www.transtats.bts.gov/OT_Delay/OT_DelayCause1.asp)
+2. [BTS Air Financial Data](https://www.transtats.bts.gov/Data_Elements.aspx?Data=1)
+3. [BTS Air Transport Employment Data](https://www.transtats.bts.gov/Employment/)
+4. [Airport Codes](https://ourairports.com/data/)
+5. [Causes](https://www.bts.gov/topics/airlines-and-airports/understanding-reporting-causes-flight-delays-and-cancellations#q7)
+
+
+# Web Citations
+1. [References Markdown](https://rmarkdown.rstudio.com/authoring_bibliographies_and_citations.html)
+2. [aggregate: tidyverse](https://davetang.org/muse/2016/10/13/using-dplyr-aggregate-r/)
+3. [Plotly Maps](https://plotly.com/r/scatter-plots-on-maps/)
+4. [Dash in RMD](https://gist.github.com/sacul-git/08e7aad8e2a6e305d4d8a49662824323)
+5. [Bib Files](https://stackoverflow.com/questions/41250648/how-to-use-bibliography-in-different-directory-when-knitting-rmarkdown-document)
+6. [FilePath Shiny](https://stackoverflow.com/questions/35604351/error-cannot-open-the-connection-in-r-shiny/38330394)
+7. [FilePath Shiny 2](https://docs.rstudio.com/shinyapps.io/Storage.html)
+8. [Comments](https://stackoverflow.com/questions/4823468/comments-in-markdown)
+9. [Plotly in Shiny](https://community.plotly.com/t/incorporate-a-plotly-graph-into-a-shiny-app/5329)
+10. [Autoformat Code](https://stackoverflow.com/questions/15703553/auto-format-r-code-in-rstudio)
+11. [Functions](https://www.tutorialspoint.com/r/r_functions.htm)
+12. [Height/Width](https://stackoverflow.com/questions/25986349/how-can-the-page-size-in-shiny-be-adjusted-to-accommodate-more-number-of-plots)
+13. [Aggregate](https://stackoverflow.com/questions/44851154/aggregate-data-frame-with-many-columns-according-to-one-column)
+14. [Wide/Long](http://www.cookbook-r.com/Manipulating_data/Converting_data_between_wide_and_long_format/)
+15. [Shiny Widgets](https://shiny.rstudio.com/tutorial/written-tutorial/lesson3/)
+16. [Waffle](https://www.geeksforgeeks.org/r-waffle-chart/)
+17. [Named Vectors](https://stackoverflow.com/questions/19265172/converting-two-columns-of-a-data-frame-to-a-named-vector/19265431)
+18. [Debugging Waffle](https://github.com/hrbrmstr/waffle/issues/49)
+19. [Logging](https://towardsdatascience.com/skewed-data-a-problem-to-your-statistical-model-9a6b5bb74e37)
+20. [Density Plots](https://ggplot2.tidyverse.org/reference/geom_density.html)
+21. [Percent Change](https://stackoverflow.com/questions/48196552/calculate-percentage-change-in-r-using-dplyr)
+22. [Month Functionality](https://stackoverflow.com/questions/22058393/convert-a-numeric-month-to-a-month-abbreviation/22058435)
+23. [geom_point](https://ggplot2.tidyverse.org/reference/geom_point.html)
+24. [Date Objects](https://stackoverflow.com/questions/47503159/ggplot-using-grouped-date-variables-such-as-year-month)
+25. [Square Heatmap](http://shanghai.hosting.nyu.edu/data/r/case-2-2-shinyapp.html)
+26. [Shiny GIF](https://stackoverflow.com/questions/35421923/how-to-create-and-display-an-animated-gif-in-shiny/53105252)
+27. [Similar Project/Data Dict](https://rstudio-pubs-static.s3.amazonaws.com/559793_b800dfca60684ccfb0458fa5f419c8ff.html)
+28. [Busiest Airports](https://en.wikipedia.org/wiki/List_of_the_busiest_airports_in_the_United_States)
+29. [filter](https://dplyr.tidyverse.org/reference/filter.html)
+30. [in](https://campus.datacamp.com/courses/effective-data-storytelling-using-the-tidyverse/filtering-grouping-summarizing?ex=2)
+31. [Animations + Shiny Cloud](https://stackoverflow.com/questions/59592030/error-the-animation-object-does-not-specify-a-save-animation-method)
+32. [Good Vis in R---GREAT TO READ!](http://r-statistics.co/Top50-Ggplot2-Visualizations-MasterList-R-Code.html#3.%20Ranking)
+33. [Dual Melt](https://stackoverflow.com/questions/1544907/melt-to-two-variable-columns)
+34. [Binding](https://www.statmethods.net/management/merging.html)
+35. [Title Case](https://www.geeksforgeeks.org/convert-first-letter-of-every-word-to-uppercase-in-r-programming-str_to_title-function/)
+36. [ggplot Colors](http://www.cookbook-r.com/Graphs/Colors_(ggplot2)/)
+37. [Spider Chart](https://www.r-graph-gallery.com/142-basic-radar-chart.html)
+38. [Mean](https://stackoverflow.com/questions/49557609/conditional-calculation-of-mean-per-month-per-year-dplyr)
+39. [Radar Chart](https://towardsdatascience.com/radar-chart-in-r-222c30866b1b)
+40. [Drop by Name](https://stackoverflow.com/questions/5234117/how-to-drop-columns-by-name-in-a-data-frame)
+41. [Dict Replace](https://stackoverflow.com/questions/7547597/dictionary-style-replace-multiple-items)
+42. [Lowercase VarNames](https://stackoverflow.com/questions/13258020/change-letter-case-of-column-names)
+43. [XGBoost](https://xgboost.readthedocs.io/en/latest/R-package/xgboostPresentation.html)
+44. [XGBoost DMatrix](https://stackoverflow.com/questions/42743460/r-xgboost-error-building-dmatrix)
+45. [XGBoost Objectives](https://xgboost.readthedocs.io/en/latest/parameter.html)
+46. [Data Table](https://shiny.rstudio.com/reference/shiny/latest/tableOutput.html)
+47. [Table Output, Shiny](https://shiny.rstudio.com/reference/shiny/latest/renderDataTable.html)
+48. [Percent Change](https://www.javaer101.com/en/article/13517844.html)
+49. [IEEE Format File](https://github.com/citation-style-language/styles/blob/master/ieee-with-url.csl)
+50. [Table Generator](https://www.tablesgenerator.com/markdown_tables)
+51. [Remove Warnings](https://intellipaat.com/community/10193/r-markdown-avoiding-package-loading-messages)
+52. [Digits](https://stackoverflow.com/questions/3443687/formatting-decimal-places-in-r)
+53. [LaTex?](https://bookdown.org/yihui/rmarkdown/markdown-syntax.html)
+54. [Axes Labels](https://ggplot2.tidyverse.org/reference/labs.html)
+55. [Rename](https://stackoverflow.com/questions/7531868/how-to-rename-a-single-column-in-a-data-frame)
+56. [Markdown Authors](https://bookdown.org/yihui/rmarkdown-cookbook/multiple-authors.html)
+57. [Buyouts](https://www.cnbc.com/2020/06/09/airline-employees-wrestle-with-voluntary-separation-leave.html)
+58. [Supress Results](https://stackoverflow.com/questions/30810476/suppress-console-output-in-r-markdown-but-keep-plot)
+59. [XGBoost Tutorial](https://www.kaggle.com/prashant111/xgboost-k-fold-cv-feature-importance)
+60. [XGBoost CV](https://stackoverflow.com/questions/35050846/xgboost-in-r-how-does-xgb-cv-pass-the-optimal-parameters-into-xgb-train)
+61. [Legends](https://stackoverflow.com/questions/14622421/how-to-change-legend-title-in-ggplot)
+
+# References
+
